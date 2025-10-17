@@ -1,0 +1,491 @@
+// ------------------ src/App.jsx ------------------
+import { useState, useEffect } from "react";
+import axios from "axios";
+
+// ---------- main app ----------
+export default function App() {
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_TMDB_KEY || "");
+  const [movies, setMovies] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [watchlist, setWatchlist] = useState({});
+  const [selectedMovie, setSelectedMovie] = useState(null);
+  const [movieDetails, setMovieDetails] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch trending movies or search results
+  useEffect(() => {
+    if (!apiKey) return;
+    const fetchUrl = searchQuery
+      ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(
+          searchQuery
+        )}`
+      : `https://api.themoviedb.org/3/trending/movie/day?api_key=${apiKey}`;
+    axios
+      .get(fetchUrl)
+      .then((res) => setMovies(res.data.results))
+      .catch((err) => console.error("TMDB fetch error:", err));
+  }, [apiKey, searchQuery]);
+
+  // Fetch movie details when selected
+  useEffect(() => {
+    if (selectedMovie && apiKey) {
+      axios
+        .get(
+          `https://api.themoviedb.org/3/movie/${selectedMovie.id}?api_key=${apiKey}&append_to_response=credits`
+        )
+        .then((res) => setMovieDetails(res.data))
+        .catch((err) => console.error("TMDB details error:", err));
+    }
+  }, [selectedMovie, apiKey]);
+
+  // ----- User management -----
+  function handleRegister(username, password) {
+    if (users.find((u) => u.username === username)) return "User already exists.";
+    const newUser = { username, password };
+    setUsers([...users, newUser]);
+    setCurrentUser(newUser);
+    return "";
+  }
+
+  function handleLogin(username, password) {
+    const user = users.find(
+      (u) => u.username === username && u.password === password
+    );
+    if (!user) return "Invalid username or password.";
+    setCurrentUser(user);
+    return "";
+  }
+
+  function handleLogout() {
+    setCurrentUser(null);
+  }
+
+  // ----- Reviews -----
+  function handleAddReview(movie, rating, text) {
+    const newReview = { movieId: movie.id, user: currentUser.username, rating, text };
+    setReviews([...reviews, newReview]);
+  }
+
+  // ----- Watchlist -----
+  function handleToggleWatchlist(movie) {
+    if (!currentUser) return;
+    setWatchlist((prev) => {
+      const userList = prev[currentUser.username] || [];
+      const isAdded = userList.find((m) => m.id === movie.id);
+      const updatedList = isAdded
+        ? userList.filter((m) => m.id !== movie.id)
+        : [...userList, movie];
+      return { ...prev, [currentUser.username]: updatedList };
+    });
+  }
+
+  function handleCloseModal() {
+    setSelectedMovie(null);
+    setMovieDetails(null);
+  }
+
+  // ---------- Styles ----------
+  const styles = {
+    app: {
+      backgroundColor: "#003d24",
+      minHeight: "100vh",
+      width: "100vw",
+      color: "#eafff1",
+      padding: 20,
+      fontFamily: "Arial, sans-serif",
+      boxSizing: "border-box",
+    },
+    button: {
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: "none",
+      marginLeft: 6,
+      cursor: "pointer",
+      background: "linear-gradient(180deg,#1b7a4f,#0e5c3a)",
+      color: "#eafff1",
+    },
+    mutedButton: {
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: "1px solid rgba(255,255,255,0.06)",
+      color: "#dfffe8",
+      background: "transparent",
+      cursor: "pointer",
+      marginLeft: 6,
+    },
+    dangerButton: {
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      background: "linear-gradient(180deg,#7a1b1b,#5c0e0e)",
+      color: "#eafff1",
+      marginLeft: 10,
+    },
+    input: {
+      padding: "8px 10px",
+      borderRadius: 8,
+      border: "1px solid rgba(255,255,255,0.06)",
+      background: "rgba(0,0,0,0.06)",
+      color: "inherit",
+      flex: 1,
+    },
+    modalOverlay: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      backgroundColor: "rgba(0,0,0,0.85)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 999,
+      overflowY: "auto",
+      padding: 20,
+      boxSizing: "border-box",
+    },
+    modalContent: {
+      backgroundColor: "#004f34",
+      borderRadius: 12,
+      padding: 20,
+      width: "90%",
+      maxWidth: 1200,
+      color: "#eafff1",
+      position: "relative",
+    },
+    closeButton: {
+      position: "absolute",
+      top: 10,
+      right: 10,
+      background: "none",
+      border: "none",
+      color: "#ffc4c4",
+      fontSize: 22,
+      cursor: "pointer",
+    },
+  };
+
+  return (
+    <div style={styles.app}>
+      <h1>🎬 Film Review Website</h1>
+
+      <AuthBox onRegister={handleRegister} onLogin={handleLogin} styles={styles} />
+      {currentUser && (
+        <div style={{ marginTop: 10 }}>
+          Logged in as <strong>{currentUser.username}</strong>
+          <button onClick={handleLogout} style={styles.dangerButton}>
+            Logout
+          </button>
+        </div>
+      )}
+
+      <hr style={{ borderColor: "rgba(255,255,255,0.06)", margin: "12px 0" }} />
+
+      {/* Search Bar */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <input
+          type="text"
+          placeholder="Search movies..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={styles.input}
+        />
+        <button style={styles.button} onClick={() => {}}>
+          Search
+        </button>
+      </div>
+
+      <h2>{searchQuery ? `Search Results` : `Trending Movies`}</h2>
+
+      {apiKey ? (
+        movies.length ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {movies.map((movie) => (
+              <div
+                key={movie.id}
+                style={{ background: "rgba(0,0,0,0.15)", borderRadius: 12, padding: 12 }}
+              >
+                <img
+                  src={`https://image.tmdb.org/t/p/w200${movie.poster_path}`}
+                  alt={movie.title}
+                  style={{ borderRadius: 8, width: "100%", cursor: "pointer" }}
+                  onClick={() => setSelectedMovie(movie)}
+                />
+                <h3 style={{ fontSize: 16, margin: "8px 0" }}>{movie.title}</h3>
+
+                <ReviewForm movie={movie} onAdd={handleAddReview} currentUser={currentUser} styles={styles} />
+
+                <div style={{ marginTop: 6 }}>
+                  {reviews
+                    .filter((r) => r.movieId === movie.id)
+                    .map((r, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          fontSize: 13,
+                          borderTop: "1px solid rgba(255,255,255,0.08)",
+                          marginTop: 4,
+                          paddingTop: 4,
+                        }}
+                      >
+                        <strong>{r.user}</strong>: {r.text} ({r.rating}/5 ⭐)
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>Loading movies...</div>
+        )
+      ) : (
+        <div>
+          <h4>Enter your TMDB API Key</h4>
+          <input
+            placeholder="Paste TMDB key here"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            style={styles.input}
+          />
+          <div style={{ fontSize: 12, marginTop: 6 }}>Tip: store your key in .env for safety.</div>
+        </div>
+      )}
+
+      {/* MOVIE DETAILS MODAL */}
+      {selectedMovie && movieDetails && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <button style={styles.closeButton} onClick={handleCloseModal}>
+              ✖
+            </button>
+
+            <h2>{movieDetails.title}</h2>
+            <img
+              src={`https://image.tmdb.org/t/p/w300${movieDetails.poster_path}`}
+              alt={movieDetails.title}
+              style={{ borderRadius: 8, width: 200, float: "left", marginRight: 12 }}
+            />
+            <p>{movieDetails.overview}</p>
+            <p>
+              <strong>Release:</strong> {movieDetails.release_date}
+            </p>
+            <p>
+              <strong>Rating:</strong> {movieDetails.vote_average}/10
+            </p>
+
+            {currentUser && (
+              <button
+                style={{ ...styles.button, marginTop: 10 }}
+                onClick={() => handleToggleWatchlist(movieDetails)}
+              >
+                {watchlist[currentUser.username]?.find((m) => m.id === movieDetails.id)
+                  ? "Remove from Watchlist"
+                  : "Add to Watchlist"}
+              </button>
+            )}
+
+            {/* Cast Section */}
+            <div style={{ marginTop: 12 }}>
+              <h3>Top Cast</h3>
+              <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 10 }}>
+                {movieDetails.credits.cast.slice(0, 10).map((c) => (
+                  <div key={c.id} style={{ textAlign: "center", minWidth: 80 }}>
+                    <img
+                      src={
+                        c.profile_path
+                          ? `https://image.tmdb.org/t/p/w185${c.profile_path}`
+                          : "https://via.placeholder.com/80x120?text=No+Photo"
+                      }
+                      alt={c.name}
+                      style={{ width: 80, height: 120, objectFit: "cover", borderRadius: 8 }}
+                    />
+                    <div style={{ fontSize: 12, marginTop: 4 }}>{c.name}</div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>{c.character}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Reviews in Modal */}
+            <div style={{ clear: "both", marginTop: 20 }}>
+              <h3>Reviews</h3>
+              <ReviewForm movie={selectedMovie} onAdd={handleAddReview} currentUser={currentUser} styles={styles} />
+              {reviews
+                .filter((r) => r.movieId === selectedMovie.id)
+                .map((r, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      fontSize: 13,
+                      borderTop: "1px solid rgba(255,255,255,0.08)",
+                      marginTop: 4,
+                      paddingTop: 4,
+                    }}
+                  >
+                    <strong>{r.user}</strong>: {r.text} ({r.rating}/5 ⭐)
+                  </div>
+                ))}
+            </div>
+
+            <div style={{ clear: "both" }}></div>
+          </div>
+        </div>
+      )}
+
+      {/* WATCHLIST DISPLAY */}
+      {currentUser && watchlist[currentUser.username]?.length > 0 && (
+        <div style={{ marginTop: 30 }}>
+          <h2>Your Watchlist</h2>
+          <div style={{ display: "flex", gap: 12, overflowX: "auto" }}>
+            {watchlist[currentUser.username].map((m) => (
+              <div key={m.id} style={{ minWidth: 120 }}>
+                <img
+                  src={`https://image.tmdb.org/t/p/w200${m.poster_path}`}
+                  alt={m.title}
+                  style={{ width: "100%", borderRadius: 8, cursor: "pointer" }}
+                  onClick={() => setSelectedMovie(m)}
+                />
+                <div style={{ fontSize: 12, marginTop: 4 }}>{m.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <footer style={{ marginTop: 40, opacity: 0.8, fontSize: 13 }}>
+        Demo app — Data from TMDB. Reviews and watchlist are stored locally.
+      </footer>
+    </div>
+  );
+}
+
+// ---------- AuthBox ----------
+function AuthBox({ onRegister, onLogin, styles }) {
+  const [mode, setMode] = useState("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    setErr("");
+    const r = mode === "login" ? onLogin(username, password) : onRegister(username, password);
+    if (r) setErr(r);
+    else {
+      setUsername("");
+      setPassword("");
+    }
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <input
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="username"
+        style={{ ...styles.input, width: 120 }}
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="password"
+        style={{ ...styles.input, width: 120 }}
+      />
+      <button type="submit" style={styles.button}>
+        {mode === "login" ? "Login" : "Register"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode(mode === "login" ? "register" : "login")}
+        style={styles.mutedButton}
+      >
+        {mode === "login" ? "Switch to register" : "Switch to login"}
+      </button>
+      {err && <div style={{ color: "#ffc4c4", marginTop: 4 }}>{err}</div>}
+    </form>
+  );
+}
+
+// ---------- ReviewForm ----------
+function ReviewForm({ movie, onAdd, currentUser, styles }) {
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(null);
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    setMsg("");
+    if (!currentUser) {
+      setMsg("Login to post reviews.");
+      return;
+    }
+    if (!text) {
+      setMsg("Please write a short review.");
+      return;
+    }
+    if (rating === 0) {
+      setMsg("Please select a rating.");
+      return;
+    }
+    onAdd(movie, rating, text);
+    setText("");
+    setRating(0);
+    setMsg("Saved locally.");
+  }
+
+  const starStyle = (index) => ({
+    cursor: "pointer",
+    fontSize: "22px",
+    color: (hover || rating) >= index ? "#ffda6b" : "#888",
+    transition: "color 0.2s",
+  });
+
+  return (
+    <form onSubmit={submit} style={{ marginTop: 6, display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label style={{ minWidth: 60 }}>Rating</label>
+        <div>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <span
+              key={i}
+              style={starStyle(i)}
+              onClick={() => setRating(i)}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+            >
+              ★
+            </span>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.8 }}>
+          {currentUser ? `Posting as ${currentUser.username}` : "Log in to post"}
+        </div>
+      </div>
+
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={4}
+        placeholder="Write your review..."
+        style={{ padding: 8, borderRadius: 8 }}
+      />
+      <div>
+        <button type="submit" style={styles.button}>
+          Post review
+        </button>
+        {msg && <span style={{ marginLeft: 8 }}>{msg}</span>}
+      </div>
+    </form>
+  );
+}
