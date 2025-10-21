@@ -2,50 +2,71 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-// ---------- main app ----------
+// ---------- main app component ----------
 export default function App() {
+  // TMDB API key (from .env or empty string)
   const [apiKey, setApiKey] = useState(import.meta.env.VITE_TMDB_KEY || "");
+  
+  // State to store movies from API
   const [movies, setMovies] = useState([]);
+  
+  // State to track logged-in user
   const [currentUser, setCurrentUser] = useState(null);
+  
+  // Simple in-memory user storage
   const [users, setUsers] = useState([]);
+  
+  // Reviews for movies (stored locally)
   const [reviews, setReviews] = useState([]);
+  
+  // Watchlist for each user (stored as username -> movie array)
   const [watchlist, setWatchlist] = useState({});
+  
+  // Movie currently selected for modal
   const [selectedMovie, setSelectedMovie] = useState(null);
+  
+  // Full movie details for modal display
   const [movieDetails, setMovieDetails] = useState(null);
+  
+  // Current search query
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch trending movies or search results
+  // ---------- Fetch movies whenever API key or search query changes ----------
   useEffect(() => {
-    if (!apiKey) return;
+    if (!apiKey) return; // skip if no API key
+
+    // Decide which API endpoint to use
     const fetchUrl = searchQuery
-      ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(
-          searchQuery
-        )}`
+      ? `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(searchQuery)}`
       : `https://api.themoviedb.org/3/trending/movie/day?api_key=${apiKey}`;
+
+    // Fetch movie data
     axios
       .get(fetchUrl)
-      .then((res) => setMovies(res.data.results))
+      .then((res) => setMovies(res.data.results)) // store results
       .catch((err) => console.error("TMDB fetch error:", err));
   }, [apiKey, searchQuery]);
 
-  // Fetch movie details when selected
+  // ---------- Fetch details for the selected movie ----------
   useEffect(() => {
     if (selectedMovie && apiKey) {
       axios
         .get(
           `https://api.themoviedb.org/3/movie/${selectedMovie.id}?api_key=${apiKey}&append_to_response=credits`
         )
-        .then((res) => setMovieDetails(res.data))
+        .then((res) => setMovieDetails(res.data)) // store detailed info
         .catch((err) => console.error("TMDB details error:", err));
     }
   }, [selectedMovie, apiKey]);
 
-  // ----- User management -----
+  // ----- User management functions -----
   function handleRegister(username, password) {
+    // Check if username is taken
     if (users.find((u) => u.username === username)) return "User already exists.";
+
     const newUser = { username, password };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
+    setUsers([...users, newUser]); // add to users
+    setCurrentUser(newUser); // auto-login after registration
     return "";
   }
 
@@ -59,34 +80,37 @@ export default function App() {
   }
 
   function handleLogout() {
-    setCurrentUser(null);
+    setCurrentUser(null); // clear logged-in user
   }
 
-  // ----- Reviews -----
+  // ----- Review management -----
   function handleAddReview(movie, rating, text) {
+    // Create review object
     const newReview = { movieId: movie.id, user: currentUser.username, rating, text };
-    setReviews([...reviews, newReview]);
+    setReviews([...reviews, newReview]); // add to reviews
   }
 
-  // ----- Watchlist -----
+  // ----- Watchlist management -----
   function handleToggleWatchlist(movie) {
-    if (!currentUser) return;
+    if (!currentUser) return; // only logged-in users
+
     setWatchlist((prev) => {
       const userList = prev[currentUser.username] || [];
       const isAdded = userList.find((m) => m.id === movie.id);
       const updatedList = isAdded
-        ? userList.filter((m) => m.id !== movie.id)
-        : [...userList, movie];
+        ? userList.filter((m) => m.id !== movie.id) // remove if exists
+        : [...userList, movie]; // add if not
       return { ...prev, [currentUser.username]: updatedList };
     });
   }
 
+  // Close modal and reset details
   function handleCloseModal() {
     setSelectedMovie(null);
     setMovieDetails(null);
   }
 
-  // ---------- Styles ----------
+  // ---------- Inline styling ----------
   const styles = {
     app: {
       backgroundColor: "#003d24",
@@ -172,7 +196,10 @@ export default function App() {
     <div style={styles.app}>
       <h1>🎬 Film Review Website</h1>
 
+      {/* Auth component */}
       <AuthBox onRegister={handleRegister} onLogin={handleLogin} styles={styles} />
+
+      {/* Logged-in user info */}
       {currentUser && (
         <div style={{ marginTop: 10 }}>
           Logged in as <strong>{currentUser.username}</strong>
@@ -184,7 +211,7 @@ export default function App() {
 
       <hr style={{ borderColor: "rgba(255,255,255,0.06)", margin: "12px 0" }} />
 
-      {/* Search Bar */}
+      {/* Search bar */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
         <input
           type="text"
@@ -200,6 +227,7 @@ export default function App() {
 
       <h2>{searchQuery ? `Search Results` : `Trending Movies`}</h2>
 
+      {/* Movie grid */}
       {apiKey ? (
         movies.length ? (
           <div
@@ -214,16 +242,19 @@ export default function App() {
                 key={movie.id}
                 style={{ background: "rgba(0,0,0,0.15)", borderRadius: 12, padding: 12 }}
               >
+                {/* Poster image */}
                 <img
                   src={`https://image.tmdb.org/t/p/w200${movie.poster_path}`}
                   alt={movie.title}
                   style={{ borderRadius: 8, width: "100%", cursor: "pointer" }}
-                  onClick={() => setSelectedMovie(movie)}
+                  onClick={() => setSelectedMovie(movie)} // open modal
                 />
                 <h3 style={{ fontSize: 16, margin: "8px 0" }}>{movie.title}</h3>
 
+                {/* Review input */}
                 <ReviewForm movie={movie} onAdd={handleAddReview} currentUser={currentUser} styles={styles} />
 
+                {/* Reviews display */}
                 <div style={{ marginTop: 6 }}>
                   {reviews
                     .filter((r) => r.movieId === movie.id)
@@ -260,7 +291,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MOVIE DETAILS MODAL */}
+      {/* Movie details modal */}
       {selectedMovie && movieDetails && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
@@ -282,6 +313,7 @@ export default function App() {
               <strong>Rating:</strong> {movieDetails.vote_average}/10
             </p>
 
+            {/* Watchlist button */}
             {currentUser && (
               <button
                 style={{ ...styles.button, marginTop: 10 }}
@@ -293,7 +325,7 @@ export default function App() {
               </button>
             )}
 
-            {/* Cast Section */}
+            {/* Top cast */}
             <div style={{ marginTop: 12 }}>
               <h3>Top Cast</h3>
               <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 10 }}>
@@ -315,7 +347,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Reviews in Modal */}
+            {/* Reviews in modal */}
             <div style={{ clear: "both", marginTop: 20 }}>
               <h3>Reviews</h3>
               <ReviewForm movie={selectedMovie} onAdd={handleAddReview} currentUser={currentUser} styles={styles} />
@@ -341,7 +373,7 @@ export default function App() {
         </div>
       )}
 
-      {/* WATCHLIST DISPLAY */}
+      {/* Watchlist display */}
       {currentUser && watchlist[currentUser.username]?.length > 0 && (
         <div style={{ marginTop: 30 }}>
           <h2>Your Watchlist</h2>
@@ -368,7 +400,7 @@ export default function App() {
   );
 }
 
-// ---------- AuthBox ----------
+// ---------- AuthBox component ----------
 function AuthBox({ onRegister, onLogin, styles }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
@@ -416,7 +448,7 @@ function AuthBox({ onRegister, onLogin, styles }) {
   );
 }
 
-// ---------- ReviewForm ----------
+// ---------- ReviewForm component ----------
 function ReviewForm({ movie, onAdd, currentUser, styles }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(null);
